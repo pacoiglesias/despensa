@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Asistente de Alacena</title>
+    <style>
+        :root { 
+            --primary-color: #4285f4; 
+            --light-gray: #f0f2f5; 
+            --medium-gray: #dfe1e6; 
+            --dark-gray: #5e6c84; 
+            --text-color: #172b4d; 
+            --bg-color: #ffffff; 
+            --success-color: #00875a; 
+            --danger-color: #de350b;
+            --logo-url: "https://ejemplo.com/tu-logo.png";
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--light-gray); margin: 0; padding: 1rem; color: var(--text-color); font-size: 16px; }
+        .container { max-width: 900px; margin: 1rem auto; background-color: var(--bg-color); border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); overflow: hidden; }
+        .header { background-color: var(--primary-color); color: white; padding: 1.5rem; text-align: center; }
+        .header h1 { margin: 0; font-size: 1.8rem; }
+        .content-grid { display: grid; grid-template-columns: 1fr; gap: 1px; background-color: var(--medium-gray); }
+        .manual-section, .scanner-section { background-color: var(--bg-color); padding: 1.5rem; }
+        @media (min-width: 768px) { .content-grid { grid-template-columns: 1fr 1fr; } }
+        h2 { color: #091e42; border-bottom: 2px solid var(--light-gray); padding-bottom: 0.5rem; margin-top: 0; }
+        #reader { width: 100%; border-radius: 8px; overflow: hidden; }
+        #reader__status_span, #reader__dashboard_section_swaplink { display: none !important; }
+        .result { margin-top: 1rem; font-weight: bold; min-height: 24px; text-align: center; }
+        .result.success { color: var(--success-color); }
+        .result.error { color: var(--danger-color); }
+        .control-group { margin-bottom: 1rem; }
+        label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
+        select { width: 100%; padding: 0.8rem; border-radius: 4px; border: 1px solid var(--medium-gray); font-size: 1rem; background-color: white; }
+        .file-upload-wrapper { position: relative; overflow: hidden; display: inline-block; width: 100%; margin-top: 1rem; }
+        .file-upload-wrapper .button { width: 100%; text-align: center; }
+        .file-upload-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; }
+        .action-panel { padding: 1.5rem; background-color: #fafbfc; border-top: 1px solid var(--medium-gray); display: none; }
+        .action-panel h3 { margin-top: 0; }
+        .button-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-top: 1rem; }
+        .button { background-color: var(--primary-color); color: white; border: none; padding: 0.8rem 1rem; border-radius: 4px; font-size: 1rem; cursor: pointer; transition: background-color 0.2s; }
+        .button.remove { background-color: var(--danger-color); }
+        .button:hover { opacity: 0.9; }
+        input[type="number"] { width: 60px; padding: 0.8rem; border-radius: 4px; border: 1px solid var(--medium-gray); font-size: 1rem; text-align: center; }
+        #loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255,255,255,0.7); z-index: 1000; text-align: center; }
+        #loader p { font-weight: bold; position: relative; top: 50%; transform: translateY(-50%); background-color: white; padding: 20px; border-radius: 8px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div id="loader"><p>Procesando...</p></div>
+
+    <div class="container">
+        <header class="header">
+            <img id="logo" src="https://ejemplo.com/tu-logo.png" alt="Logo de la aplicación" style="height: 50px; margin-bottom: 10px;">
+            <h1>Asistente de Alacena Inteligente</h1>
+        </header>
+        
+        <main class="content-grid">
+            <section class="manual-section">
+                <h2>Selección Manual</h2>
+                <div class="control-group">
+                    <label for="category-select">1. Elige Categoría</label>
+                    <select id="category-select" disabled><option>Cargando...</option></select>
+                </div>
+                <div class="control-group">
+                    <label for="product-select">2. Elige Producto</label>
+                    <select id="product-select" disabled><option>Selecciona una categoría</option></select>
+                </div>
+            </section>
+
+            <section class="scanner-section">
+                <h2>Escaneo de QR</h2>
+                <div id="reader"></div>
+                <div class="file-upload-wrapper">
+                    <button type="button" class="button">🖼️ O subir una imagen de QR</button>
+                    <input type="file" id="qr-input-file" accept="image/*">
+                </div>
+                <p class="result" id="scan-result">Apunte la cámara al QR o suba una imagen</p>
+            </section>
+        </main>
+        
+        <div class="action-panel" id="action-panel">
+            <h3 id="action-product-name"></h3>
+            <p id="action-product-stock" style="margin: 0 0 1rem 0;"></p>
+            <div class="button-group">
+                <button class="button remove" onclick="processAction(-1, 'Retiro rápido')">[ Usé 1 ]</button>
+                <button class="button" onclick="processAction(1, 'Ingreso rápido')">[ Guardé 1 ]</button>
+            </div>
+            <div class="button-group">
+                <input type="number" id="specific-qty" placeholder="Cant.">
+                <button class="button remove" onclick="processSpecificQty('remove')">Quitar</button>
+                <button class="button" onclick="processSpecificQty('add')">Añadir</button>
+            </div>
+        </div>
+    </div>
+
+    <audio id="success-sound" src="https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3"></audio>
+    <audio id="error-sound" src="https://assets.mixkit.co/sfx/preview/mixkit-small-bell-dring-3093.mp3"></audio>
+
+    <script src="https://unpkg.com/html5-qrcode/html5-qrcode.min.js"></script>
+    <script>
+        let inventory = [];
+        let currentProductId = null;
+        let html5QrCode = null;
+        const successSound = document.getElementById('success-sound');
+        const errorSound = document.getElementById('error-sound');
+        let isProcessing = false;
+
+        const serverHandler = google.script.run.withSuccessHandler(onUpdateSuccess).withFailureHandler(onServerFailure);
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            showLoader(true, "Cargando configuración...");
+            google.script.run.withSuccessHandler(onBrandingReceived).withFailureHandler(onServerFailure).getAppBranding();
+        });
+
+        function onBrandingReceived(brandingData) {
+            const root = document.documentElement;
+            if (brandingData && brandingData.colors) {
+                root.style.setProperty('--primary-color', brandingData.colors.primary);
+                root.style.setProperty('--light-gray', brandingData.colors.lightGray);
+                root.style.setProperty('--medium-gray', brandingData.colors.mediumGray);
+                root.style.setProperty('--dark-gray', brandingData.colors.darkGray);
+                root.style.setProperty('--text-color', brandingData.colors.textColor);
+                root.style.setProperty('--bg-color', brandingData.colors.bgColor);
+                root.style.setProperty('--success-color', brandingData.colors.success);
+                root.style.setProperty('--danger-color', brandingData.colors.danger);
+            }
+            if (brandingData && brandingData.logoUrl) {
+                const logo = document.getElementById('logo');
+                if (logo) logo.src = brandingData.logoUrl;
+            }
+            
+            showLoader(true, "Cargando inventario...");
+            google.script.run.withSuccessHandler(onDataReceived).withFailureHandler(onServerFailure).getInitialData();
+        }
+
+        function onDataReceived(jsonProducts) {
+            inventory = JSON.parse(jsonProducts);
+            populateCategoryDropdown();
+            showLoader(false);
+            
+            html5QrCode = new Html5Qrcode("reader", { formats: [ Html5QrcodeSupportedFormats.QR_CODE ] });
+            startLiveScanner();
+
+            document.getElementById('qr-input-file').addEventListener('change', e => {
+                if (isProcessing) return;
+                if (e.target.files.length == 0) return;
+                isProcessing = true;
+                
+                const imageFile = e.target.files[0];
+                showLoader(true, "Analizando imagen...");
+                html5QrCode.scanFile(imageFile, true)
+                    .then(decodedText => onScanSuccess(decodedText))
+                    .catch(err => onScanFailure("No se pudo decodificar el QR de la imagen."))
+                    .finally(() => {
+                        showLoader(false);
+                        isProcessing = false;
+                    });
+            });
+        }
+        
+        function startLiveScanner() {
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
+                .catch(err => {
+                    console.error("No se pudo iniciar el escáner de cámara.", err);
+                    document.getElementById('scan-result').innerText = 'Error de cámara. Intente subir una imagen.';
+                });
+        }
+        
+        const onScanSuccess = (decodedText, decodedResult) => {
+            if (isProcessing) return;
+            isProcessing = true;
+            
+            html5QrCode.stop().then(ignore => {
+                setScanResult(`¡Éxito! Producto encontrado.`, 'success');
+                successSound.play();
+                displayProductActions(decodedText);
+            }).catch(err => {
+                console.error("Error al detener el escáner", err);
+                isProcessing = false;
+            });
+        };
+        
+        const onScanFailure = (error) => { /* No hacemos nada para no llenar de mensajes */ };
+        
+        function populateCategoryDropdown() {
+            const categories = [...new Set(inventory.map(p => p.categoría).filter(Boolean))].sort();
+            const select = document.getElementById('category-select');
+            select.innerHTML = '<option value="">-- Elige Categoría --</option>';
+            categories.forEach(c => {
+                const option = document.createElement('option');
+                option.value = c; option.innerText = c;
+                select.appendChild(option);
+            });
+            select.disabled = false;
+        }
+
+        document.getElementById('category-select').addEventListener('change', function() {
+            const products = inventory.filter(p => p.categoría === this.value).sort((a,b) => a.nombre_del_producto.localeCompare(b.nombre_del_producto));
+            const select = document.getElementById('product-select');
+            select.innerHTML = '<option value="">-- Elige Producto --</option>';
+            products.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.id_producto; option.innerText = p.nombre_del_producto;
+                select.appendChild(option);
+            });
+            select.disabled = false;
+            document.getElementById('action-panel').style.display = 'none';
+            setScanResult('Apunte la cámara al QR o suba una imagen', '');
+        });
+
+        document.getElementById('product-select').addEventListener('change', function() {
+            if (this.value) {
+                displayProductActions(this.value);
+                setScanResult('Producto seleccionado manualmente', 'success');
+            } else {
+                document.getElementById('action-panel').style.display = 'none';
+                setScanResult('Apunte la cámara al QR o suba una imagen', '');
+            }
+        });
+        
+        function displayProductActions(productId) {
+            const product = inventory.find(p => p.id_producto === productId);
+            if (!product) {
+                setScanResult("QR no encontrado en el inventario.", 'error');
+                errorSound.play();
+                isProcessing = false;
+                startLiveScanner();
+                return;
+            }
+            currentProductId = productId;
+            document.getElementById('action-product-name').innerText = product.nombre_del_producto;
+            document.getElementById('action-product-stock').innerText = `Stock Actual: ${product.cantidad_actual}`;
+            document.getElementById('action-panel').style.display = 'block';
+            
+            const categorySelect = document.getElementById('category-select');
+            if (categorySelect.value !== product.categoría) {
+                categorySelect.value = product.categoría;
+                const productSelect = document.getElementById('product-select');
+                productSelect.innerHTML = '';
+                const products = inventory.filter(p => p.categoría === product.categoría).sort((a,b) => a.nombre_del_producto.localeCompare(b.nombre_del_producto));
+                products.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id_producto; option.innerText = p.nombre_del_producto;
+                    productSelect.appendChild(option);
+                });
+                productSelect.value = product.id_producto;
+            } else {
+                document.getElementById('product-select').value = product.id_producto;
+            }
+
+            isProcessing = false;
+        }
+        
+        function processAction(amount, actionType) {
+            if (isProcessing || !currentProductId) return;
+            isProcessing = true;
+            const productName = inventory.find(p => p.id_producto === currentProductId).nombre_del_producto;
+            if (confirm(`¿Seguro que desea ${actionType.toLowerCase()} 1 unidad de '${productName}'?`)) {
+                showLoader(true, "Actualizando...");
+                serverHandler.updateStock(currentProductId, amount, actionType);
+            } else {
+                isProcessing = false;
+            }
+        }
+
+        function processSpecificQty(mode) {
+            if (isProcessing || !currentProductId) return;
+            isProcessing = true;
+            const qtyInput = document.getElementById('specific-qty');
+            const amount = parseInt(qtyInput.value);
+
+            if (isNaN(amount) || amount <= 0) {
+                alert("Por favor, ingrese una cantidad válida y positiva.");
+                isProcessing = false;
+                return;
+            }
+            
+            const finalAmount = (mode === 'add') ? amount : -amount;
+            const actionType = (mode === 'add') ? 'Ingreso' : 'Retiro';
+            const productName = inventory.find(p => p.id_producto === currentProductId).nombre_del_producto;
+            
+            if (confirm(`¿Seguro que desea ${actionType.toLowerCase()} ${amount} unidad(es) de '${productName}'?`)) {
+                showLoader(true, "Actualizando...");
+                serverHandler.updateStock(currentProductId, finalAmount, actionType);
+            } else {
+                isProcessing = false;
+            }
+        }
+        
+        function onUpdateSuccess(response) {
+            if(response.success) {
+                const product = inventory.find(p => p.id_producto === currentProductId);
+                if (product) {
+                  product.cantidad_actual = response.newQuantity;
+                  displayProductActions(currentProductId);
+                }
+                document.getElementById('specific-qty').value = '';
+                setScanResult(`Stock actualizado a ${response.newQuantity}`, 'success');
+            } else {
+                alert("Error del servidor: " + response.message);
+            }
+            showLoader(false);
+            isProcessing = false;
+            startLiveScanner();
+        }
+        
+        function onServerFailure(error) {
+            alert("Ocurrió un error en el servidor. Intente de nuevo.\n\nDetalles del error: " + error.message);
+            showLoader(false);
+            isProcessing = false;
+            startLiveScanner();
+        }
+
+        function showLoader(show, message = "Procesando...") {
+            const loader = document.getElementById('loader');
+            loader.querySelector('p').innerText = message;
+            loader.style.display = show ? 'block' : 'none';
+        }
+        
+        function setScanResult(message, type) {
+            const resultEl = document.getElementById('scan-result');
+            resultEl.innerText = message;
+            resultEl.className = `result ${type}`;
+            if (type !== 'success' && type !== 'error') {
+                setTimeout(() => { 
+                    resultEl.innerText = 'Apunte la cámara al QR o suba una imagen';
+                    resultEl.className = 'result';
+                }, 3000);
+            }
+        }
+    </script>
+</body>
+</html>
